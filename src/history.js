@@ -17,9 +17,12 @@ history.sequelize = sequelize;
 module.exports = history.sequelize.define(
     'histories',
     {
-        number: {
+        id: {
             type: Sequelize.STRING,
             primaryKey: true,
+        },
+        number: {
+            type: Sequelize.STRING,
         },
         target: {
             type: Sequelize.STRING,

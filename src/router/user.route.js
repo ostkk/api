@@ -6,6 +6,7 @@ const history = require('../history');
 
 const jwt = require("jsonwebtoken")
 const SECRET = 'UYGIUYGIADUYSGDIYSGFOUYGFOIU'
+const nanoid = require("nanoid");
 
 router.post('/login', async (ctx, next) => {
     let { number, password } = ctx.request.body;
@@ -199,6 +200,84 @@ router.post('/updateStudentData', async (ctx, next) => {
         ctx.body = {
             code: 201,
             message: '更新失败'
+        }
+    })
+})
+
+router.post('/applyOut', async (ctx, next) => {
+    let { number, date, area } = ctx.request.body;
+    await db.findAll({
+        where: {
+            number
+        }
+    }).then(async (user) => {
+        if (user[0]) {
+            if (user[0].status == 'in') {
+                await history.create({
+                    id: nanoid.nanoid(), number, date, target: area, passed: 0, outOrBack: 'out'
+                }).then(res => {
+                    ctx.body = {
+                        code: 200,
+                        message: '提交成功'
+                    }
+                }), rej => {
+                    ctx.body = {
+                        code: 201,
+                        message: '提交失败'
+                    }
+                }
+            }
+            else {
+                ctx.body = {
+                    code: 201,
+                    message: '当前不在校内'
+                }
+            }
+        }
+        else {
+            ctx.body = {
+                code: 201,
+                message: '提交失败'
+            }
+        }
+    })
+})
+
+router.post('/applyBack', async (ctx, next) => {
+    let { number, date, area } = ctx.request.body;
+    await db.findAll({
+        where: {
+            number
+        }
+    }).then(async (user) => {
+        if (user[0]) {
+            if (user[0].status == 'out') {
+                await history.create({
+                    id: nanoid.nanoid(), number, date, target: area, passed: 0, outOrBack: 'back'
+                }).then(res => {
+                    ctx.body = {
+                        code: 200,
+                        message: '提交成功'
+                    }
+                }), rej => {
+                    ctx.body = {
+                        code: 201,
+                        message: '提交失败'
+                    }
+                }
+            }
+            else {
+                ctx.body = {
+                    code: 201,
+                    message: '当前在校内'
+                }
+            }
+        }
+        else {
+            ctx.body = {
+                code: 201,
+                message: '提交失败'
+            }
         }
     })
 })
