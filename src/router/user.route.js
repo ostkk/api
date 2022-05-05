@@ -3,10 +3,10 @@ const Router = require('koa-router')
 const router = new Router({ prefix: '/api' })
 const db = require('../db');
 const history = require('../history');
+const city = require('../city');
 
 const jwt = require("jsonwebtoken")
 const SECRET = 'UYGIUYGIADUYSGDIYSGFOUYGFOIU'
-const nanoid = require("nanoid");
 
 router.post('/login', async (ctx, next) => {
     let { number, password } = ctx.request.body;
@@ -82,6 +82,7 @@ router.post('/logout', async (ctx, next) => {
 
 const fs = require('fs');
 const xlsx = require('xlsx');
+const { devNull } = require('os');
 router.post('/uploadStudentList', async (ctx, next) => {
     const file = ctx.request.files.file;
     if (file.name.split('.').pop() != 'xlsx') {
@@ -104,7 +105,6 @@ router.post('/uploadStudentList', async (ctx, next) => {
             const data = xlsx.utils.sheet_to_json(worksheet);
             datas.push(data)
         }
-        // console.log(datas);
         for (let data of datas[0]) {
             let { name, number } = data;
             number = number.toString();
@@ -147,7 +147,6 @@ function getFile(reader, upStream) {
 }
 
 router.post('/uploadStudent', async (ctx, next) => {
-    console.log(ctx.request.body);
     let { name, number } = ctx.request.body;
     await db.create({
         name, number, password: '123456', status: 'in',
@@ -206,6 +205,44 @@ router.post('/updateStudentData', async (ctx, next) => {
 
 router.post('/applyOut', async (ctx, next) => {
     let { number, date, area } = ctx.request.body;
+    date = date.split('-')
+    if (date[1].length == 1) {
+        date[1] = '0' + date[1];
+    }
+    if (date[2].length == 1) {
+        date[2] = '0' + date[2];
+    }
+    date = date.join('-')
+    let f = 0;
+    await history.findAll({
+        where: {
+            number
+        }
+    }).then(user => {
+        user.forEach(e => {
+            if (e.date == date && e.outOrBack == 'out' && !e.passed) {
+                ctx.body = {
+                    code: 201,
+                    message: '请勿重复提交申请'
+                }
+                f = 1;
+                return
+            }
+        })
+    })
+    if (f == 1) {
+        return;
+    }
+    let passed = false;
+    await city.findAll({
+        where: {
+            target: area
+        }
+    }).then(res => {
+        if (res.length) {
+            passed = true
+        }
+    }, rej => { })
     await db.findAll({
         where: {
             number
@@ -214,7 +251,7 @@ router.post('/applyOut', async (ctx, next) => {
         if (user[0]) {
             if (user[0].status == 'in') {
                 await history.create({
-                    id: nanoid.nanoid(), number, date, target: area, passed: 0, outOrBack: 'out'
+                    number, date, target: area, passed, outOrBack: 'out'
                 }).then(res => {
                     ctx.body = {
                         code: 200,
@@ -245,6 +282,44 @@ router.post('/applyOut', async (ctx, next) => {
 
 router.post('/applyBack', async (ctx, next) => {
     let { number, date, area } = ctx.request.body;
+    date = date.split('-')
+    if (date[1].length == 1) {
+        date[1] = '0' + date[1];
+    }
+    if (date[2].length == 1) {
+        date[2] = '0' + date[2];
+    }
+    date = date.join('-')
+    let f = 0;
+    await history.findAll({
+        where: {
+            number
+        }
+    }).then(user => {
+        user.forEach(e => {
+            if (e.date == date && e.outOrBack == 'back' && !e.passed) {
+                ctx.body = {
+                    code: 201,
+                    message: '请勿重复提交申请'
+                }
+                f = 1;
+                return
+            }
+        })
+    })
+    if (f == 1) {
+        return;
+    }
+    let passed = false;
+    await city.findAll({
+        where: {
+            target: area
+        }
+    }).then(res => {
+        if (res.length) {
+            passed = true
+        }
+    }, rej => { })
     await db.findAll({
         where: {
             number
@@ -253,7 +328,7 @@ router.post('/applyBack', async (ctx, next) => {
         if (user[0]) {
             if (user[0].status == 'out') {
                 await history.create({
-                    id: nanoid.nanoid(), number, date, target: area, passed: 0, outOrBack: 'back'
+                    number, date, target: area, passed, outOrBack: 'back'
                 }).then(res => {
                     ctx.body = {
                         code: 200,
@@ -282,4 +357,213 @@ router.post('/applyBack', async (ctx, next) => {
     })
 })
 
+router.get('/applyCode', async (ctx, next) => {
+    let number = ctx.query.number;
+    let date = new Date();
+    date = `${date.getFullYear()}-${date.getMonth() + 1}-${date.getDate()}`
+    date = date.split('-');
+    if (date[1].length == 1) {
+        date[1] = '0' + date[1];
+    }
+    if (date[2].length == 1) {
+        date[2] = '0' + date[2];
+    }
+    date = date.join('-')
+    await history.findAll({
+        where: {
+            number
+        }
+    }).then(async user => {
+        let f = 0;
+        for (let i = 0; i < user.length; i++) {
+            if (user[i].date == date && user[i].passed == false) {
+                ctx.body = {
+                    code: 201,
+                    message: '当前不在通行时间内'
+                }
+                return;
+            }
+        }
+        for (let i = 0; i < user.length; i++) {
+            if (user[i].date == date && user[i].passed == true) {
+                let s = user[i].outOrBack == 'back' ? 'in' : 'out';
+                await db.update({ status: s }, { where: { number } }).then(res => {
+                    ctx.body = {
+                        code: 200,
+                        message: 'passed'
+                    }
+                    f = 1;
+                })
+            }
+        }
+        if (f == 0) {
+            ctx.body = {
+                code: 201,
+                message: '当前不在通行时间内'
+            }
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '当前不在通行时间内'
+        }
+    })
+})
+
+router.get('/applyList', async (ctx, next) => {
+    let passed = ctx.query.passed == 'true' ? true : false;
+    await history.findAll({
+        where: {
+            passed
+        }
+    }).then(async user => {//获取学号
+        for (let i = 0; i < user.length; i++) {
+            await db.findAll({
+                where: {
+                    number: user[i].number
+                }
+            }).then(us => {
+                user[i].dataValues.name = us[0].name;
+            })
+        }
+        ctx.body = {
+            code: 200,
+            data: {
+                user
+            }
+        }
+    })
+})
+
+router.get('/getNewApplyNumber', async (ctx, next) => {
+    await history.findAll({
+        where: {
+            passed: false
+        }
+    }).then(user => {
+        ctx.body = {
+            code: 200,
+            data: {
+                number: user.length
+            }
+        }
+    })
+})
+
+router.get('/passOrRefuse', async (ctx, next) => {
+    let { s, id } = ctx.query;
+    if (s == 1) { //passed
+        await history.update({ passed: true }, { where: { id } }).then(res => {
+            ctx.body = {
+                code: 200,
+                data: {
+                    message: '已通过'
+                }
+            }
+        }, rej => {
+            ctx.body = {
+                code: 201,
+                data: {
+                    message: '未通过'
+                }
+            }
+        })
+    }
+    else {
+        await history.destroy({ where: { id } }).then(res => {
+            ctx.body = {
+                code: 200,
+                data: {
+                    message: '已删除该申请'
+                }
+            }
+        }, rej => {
+            ctx.body = {
+                code: 201,
+                data: {
+                    message: '删除失败'
+                }
+            }
+        })
+    }
+})
+
+router.post('/addCity', async (ctx, next) => {
+    await city.create({ target: ctx.request.body.area, auto: false }).then(res => {
+        if (res) {
+            ctx.body = {
+                code: 200,
+                message: '添加成功',
+            }
+        }
+        else {
+            ctx.body = {
+                code: 201,
+                message: '请勿重复添加',
+            }
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '请勿重复添加',
+        }
+    })
+})
+
+router.get('/getCity', async (ctx, next) => {
+    await city.findAll().then(citys => {
+        ctx.body = {
+            code: 200,
+            data: citys
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '获取自动审批城市列表失败'
+        }
+    })
+})
+
+router.delete('/deleteCity', async (ctx, next) => {
+    await city.destroy({
+        where: {
+            target: JSON.parse(ctx.request.query.data).target
+        }
+    }).then(res => {
+        ctx.body = {
+            code: 200,
+            message: '删除成功'
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '删除失败'
+        }
+    })
+})
+
+router.post('/switchAuto', async (ctx, next) => {
+    if (ctx.request.body.auto == true) {
+        await history.update({ passed: true }, {
+            where: {
+                target: ctx.request.body.target
+            }
+        }).then(res => { }, rej => { });
+    }
+    await city.update({ auto: ctx.request.body.auto }, {
+        where: {
+            target: ctx.request.body.target
+        }
+    }).then(res => {
+        ctx.body = {
+            code: 200,
+            message: '设置成功'
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '设置失败'
+        }
+    })
+})
 module.exports = router

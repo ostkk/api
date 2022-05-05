@@ -18,7 +18,7 @@ module.exports = history.sequelize.define(
     'histories',
     {
         id: {
-            type: Sequelize.STRING,
+            type: Sequelize.INTEGER,
             primaryKey: true,
         },
         number: {
