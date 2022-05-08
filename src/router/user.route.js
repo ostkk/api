@@ -7,9 +7,11 @@ const city = require('../city');
 
 const jwt = require("jsonwebtoken")
 const SECRET = 'UYGIUYGIADUYSGDIYSGFOUYGFOIU'
+const crypto = require('crypto');
 
 router.post('/login', async (ctx, next) => {
     let { number, password } = ctx.request.body;
+    password = crypto.createHash('md5').update(password).digest('hex');
     let token = '';
     await db.findAll({
         where: {
@@ -57,7 +59,7 @@ router.get('/getInfo', async (ctx, next) => {
             }
         } else {
             await db.findAll({
-                attributes: ['name', 'number', 'status'],
+                // attributes: ['name', 'number', 'status'],
                 where: {
                     number: decode.number
                 }
@@ -115,8 +117,10 @@ router.post('/uploadStudentList', async (ctx, next) => {
                 }
                 return;
             }
+            let password = '123456';
+            password = crypto.createHash('md5').update(password).digest('hex')
             await db.create({
-                name, number, password: '123456', status: 'in',
+                name, number, password, status: 'in',
             }).then(res => {
             }, rej => {
                 ctx.body = {
@@ -148,8 +152,10 @@ function getFile(reader, upStream) {
 
 router.post('/uploadStudent', async (ctx, next) => {
     let { name, number } = ctx.request.body;
+    let password = '123456';
+    password = crypto.createHash('md5').update(password).digest('hex');
     await db.create({
-        name, number, password: '123456', status: 'in',
+        name, number, password, status: 'in',
     }).then(res => {
         ctx.body = {
             code: 200,
@@ -189,7 +195,10 @@ router.post('/searchStudent', async (ctx, next) => {
 })
 
 router.post('/updateStudentData', async (ctx, next) => {
-    let { prenumber, number, status, name, password } = ctx.request.body;
+    let { prenumber, number, status, name, resetPassword, password } = ctx.request.body;
+    if (resetPassword == "1") { //重置密码为123456
+        password = crypto.createHash('md5').update("123456").digest('hex');
+    }
     await db.update({ number, status, name, password }, { where: { number: prenumber } }).then(users => {
         ctx.body = {
             code: 200,
@@ -563,6 +572,26 @@ router.post('/switchAuto', async (ctx, next) => {
         ctx.body = {
             code: 201,
             message: '设置失败'
+        }
+    })
+})
+
+router.post('/changePassword', async (ctx, next) => {
+    let { number, password } = ctx.request.body;
+    password = crypto.createHash('md5').update(password).digest('hex');
+    await db.update({ password }, {
+        where: {
+            number
+        }
+    }).then(res => {
+        ctx.body = {
+            code: 200,
+            message: '修改成功'
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '修改失败'
         }
     })
 })
