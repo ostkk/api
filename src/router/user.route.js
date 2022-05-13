@@ -595,4 +595,22 @@ router.post('/changePassword', async (ctx, next) => {
         }
     })
 })
+
+router.delete('/deleteStu', async (ctx, next) => {
+    await db.destroy({
+        where: {
+            number: JSON.parse(ctx.request.query.data).number
+        }
+    }).then(res => {
+        ctx.body = {
+            code: 200,
+            message: '删除成功'
+        }
+    }, rej => {
+        ctx.body = {
+            code: 201,
+            message: '删除失败'
+        }
+    })
+})
 module.exports = router
